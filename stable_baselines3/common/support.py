@@ -12,7 +12,10 @@ def support_to_value(coefficients: th.Tensor, support: th.Tensor) -> th.Tensor:
         th.Tensor: values
     """
     if support.ndim == 1:
-        support = support.unsqueeze(0).expand(coefficients.size(0), -1)
+        support = th.tile(
+            support.unsqueeze(0),
+            [coefficients.shape[-2], 1]
+        )
     assert support.ndim == 2, "support must be 1 or 2 dimensional"
     assert support.size(-1) == coefficients.size(-1), "support and coefficients must match"
     assert th.allclose(coefficients.sum(dim=-1), th.tensor(1.)), "coefficients must sum to 1"
@@ -68,6 +71,7 @@ def scale_values(values: th.Tensor) -> th.Tensor:
     Returns:
         th.Tensor: converted values
     """
+    assert isinstance(values, th.Tensor), "values must be a tensor"
     return th.sign(values) * (
         th.sqrt(
             th.abs(values) + 1
@@ -83,6 +87,7 @@ def inverse_scale_values(values: th.Tensor) -> th.Tensor:
     Returns:
         th.Tensor: inverted values
     """
+    assert isinstance(values, th.Tensor), "values must be a tensor"
     return th.sign(values) * (
         (
             (
