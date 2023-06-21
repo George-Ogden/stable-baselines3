@@ -11,6 +11,7 @@ from stable_baselines3.common.distributions import (
     BernoulliDistribution,
     CategoricalDistribution,
     DiagGaussianDistribution,
+    GaussianDistribution,
     MultiCategoricalDistribution,
     SquashedDiagGaussianDistribution,
     StateDependentNoiseDistribution,
@@ -165,6 +166,7 @@ def test_categorical(dist, CAT_ACTIONS):
         BernoulliDistribution(N_ACTIONS).proba_distribution(th.rand(N_ACTIONS)),
         CategoricalDistribution(N_ACTIONS).proba_distribution(th.rand(N_ACTIONS)),
         DiagGaussianDistribution(N_ACTIONS).proba_distribution(th.rand(N_ACTIONS), th.rand(N_ACTIONS)),
+        GaussianDistribution(N_ACTIONS).proba_distribution(th.rand(N_ACTIONS), th.eye(N_ACTIONS)),
         MultiCategoricalDistribution([N_ACTIONS, N_ACTIONS]).proba_distribution(th.rand(1, sum([N_ACTIONS, N_ACTIONS]))),
         SquashedDiagGaussianDistribution(N_ACTIONS).proba_distribution(th.rand(N_ACTIONS), th.rand(N_ACTIONS)),
         StateDependentNoiseDistribution(N_ACTIONS).proba_distribution(
@@ -192,6 +194,13 @@ def test_kl_divergence(dist_type):
         log_std2 = th.rand(1).repeat(N_SAMPLES, 1)
         dist1 = dist_type.proba_distribution(mean_actions1, log_std1)
         dist2 = deepcopy(dist_type).proba_distribution(mean_actions2, log_std2)
+    elif isinstance(dist_type, GaussianDistribution):
+        mean_actions1 = th.rand(N_ACTIONS).repeat(N_SAMPLES, 1)
+        mean_actions2 = th.rand(N_ACTIONS).repeat(N_SAMPLES, 1)
+        cov_mat1 = th.eye(N_ACTIONS).repeat(N_SAMPLES, 1, 1)
+        cov_mat2 = th.eye(N_ACTIONS).repeat(N_SAMPLES, 1, 1)
+        dist1 = dist_type.proba_distribution(mean_actions1, cov_mat1)
+        dist2 = deepcopy(dist_type).proba_distribution(mean_actions2, cov_mat2)
     elif isinstance(dist_type, BernoulliDistribution):
         dist1 = dist_type.proba_distribution(th.rand(1).repeat(N_SAMPLES, 1))
         dist2 = deepcopy(dist_type).proba_distribution(th.rand(1).repeat(N_SAMPLES, 1))
