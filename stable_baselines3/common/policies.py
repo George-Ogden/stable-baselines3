@@ -17,6 +17,7 @@ from stable_baselines3.common.distributions import (
     CategoricalDistribution,
     DiagGaussianDistribution,
     Distribution,
+    GaussianDistribution,
     MultiCategoricalDistribution,
     StateDependentNoiseDistribution,
     make_proba_distribution,
@@ -569,6 +570,10 @@ class ActorCriticPolicy(BasePolicy):
             self.action_net, self.log_std = self.action_dist.proba_distribution_net(
                 latent_dim=latent_dim_pi, log_std_init=self.log_std_init
             )
+        elif isinstance(self.action_dist, GaussianDistribution):
+            self.action_net, self.covariance_generator = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi
+            )
         elif isinstance(self.action_dist, StateDependentNoiseDistribution):
             self.action_net, self.log_std = self.action_dist.proba_distribution_net(
                 latent_dim=latent_dim_pi, latent_sde_dim=latent_dim_pi, log_std_init=self.log_std_init
@@ -654,6 +659,8 @@ class ActorCriticPolicy(BasePolicy):
 
         if isinstance(self.action_dist, DiagGaussianDistribution):
             return self.action_dist.proba_distribution(mean_actions, self.log_std)
+        elif isinstance(self.action_dist, GaussianDistribution):
+            return self.action_dist.proba_distribution(mean_actions, self.covariance_generator)
         elif isinstance(self.action_dist, CategoricalDistribution):
             # Here mean_actions are the logits before the softmax
             return self.action_dist.proba_distribution(action_logits=mean_actions)
