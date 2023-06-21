@@ -3,8 +3,15 @@ from typing import Any, Dict, List, Optional, Type
 import torch as th
 from gymnasium import spaces
 from torch import nn
+import math
 
 from stable_baselines3.common.policies import BasePolicy
+from stable_baselines3.common.support import (
+    support_to_value,
+    value_to_support,
+    scale_values,
+    inverse_scale_values
+)
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
     CombinedExtractor,
@@ -49,21 +56,45 @@ class QNetwork(BasePolicy):
         if net_arch is None:
             net_arch = [64, 64]
 
+        value_range = th.tensor(
+            (-1000., 1000.)
+         ) # TODO: make this a parameter based on the environment
+        self.value_coefficients = nn.Parameter(
+            th.arange(
+                th.floor(scale_values(value_range[0])),
+                th.ceil(scale_values(value_range[1])) + 1,
+            ),
+            requires_grad=False,
+        )
+
         self.net_arch = net_arch
         self.activation_fn = activation_fn
         self.features_dim = features_dim
-        action_dim = int(self.action_space.n)  # number of actions
-        q_net = create_mlp(self.features_dim, action_dim, self.net_arch, self.activation_fn)
+        self.action_dim = int(self.action_space.n)  # number of actions
+        self.value_dim = len(self.value_coefficients) # size of value support
+        q_net = create_mlp(self.features_dim, self.action_dim * self.value_dim, self.net_arch, self.activation_fn)
         self.q_net = nn.Sequential(*q_net)
 
-    def forward(self, obs: th.Tensor) -> th.Tensor:
+    def forward(self, obs: th.Tensor, return_values: bool = True) -> th.Tensor:
         """
         Predict the q-values.
 
         :param obs: Observation
         :return: The estimated Q-Value for each action.
         """
-        return self.q_net(self.extract_features(obs, self.features_extractor))
+        logits = self.q_net(self.extract_features(obs, self.features_extractor))
+        if not return_values:
+            logits = logits.reshape(logits.shape[:-1] + (self.action_space.n, self.value_dim))
+            return logits
+        batch_size = logits.shape[:-1]
+        logits = logits.reshape((math.prod(logits.shape[:-1]), self.action_dim, self.value_dim))
+        values = support_to_value(
+            th.softmax(logits, dim=-1),
+            support=self.value_coefficients
+        )
+        values = inverse_scale_values(values)
+        values = values.reshape(batch_size + (self.action_dim,))
+        return values
 
     def _predict(self, observation: th.Tensor, deterministic: bool = True) -> th.Tensor:
         q_values = self(observation)
