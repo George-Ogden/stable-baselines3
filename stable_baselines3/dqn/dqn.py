@@ -6,6 +6,7 @@ import torch as th
 from gymnasium import spaces
 from torch.nn import functional as F
 
+from stable_baselines3.common.support import value_to_support, scale_values
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
@@ -194,22 +195,31 @@ class DQN(OffPolicyAlgorithm):
 
             with th.no_grad():
                 # Compute the next Q-values using the target network
-                next_q_values = self.q_net_target(replay_data.next_observations)
+                next_q_values = self.q_net_target(replay_data.next_observations, return_values=True)
                 # Follow greedy policy: use the one with the highest value
                 next_q_values, _ = next_q_values.max(dim=1)
                 # Avoid potential broadcast issue
                 next_q_values = next_q_values.reshape(-1, 1)
                 # 1-step TD target
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
+                # Convert to logits for calulating loss
+                target_q_logits = value_to_support(scale_values(target_q_values).squeeze(-1), self.q_net.value_coefficients)
 
             # Get current Q-values estimates
-            current_q_values = self.q_net(replay_data.observations)
+            current_q_logits = self.q_net(replay_data.observations, return_values=False)
 
             # Retrieve the q-values for the actions from the replay buffer
-            current_q_values = th.gather(current_q_values, dim=1, index=replay_data.actions.long())
+            # Tile to select all values from support
+            actions = th.tile(
+                replay_data.actions.unsqueeze(-1),
+                (1, 1, self.q_net.value_dim),
+            )
+            # Select the q-values for the actions
+            current_q_logits = th.gather(current_q_logits, dim=1, index=actions.long())
+            current_q_logits = current_q_logits.squeeze(1)
 
-            # Compute Huber loss (less sensitive to outliers)
-            loss = F.smooth_l1_loss(current_q_values, target_q_values)
+            # Compute loss using cross entropy
+            loss = F.cross_entropy(current_q_logits, target_q_logits)
             losses.append(loss.item())
 
             # Optimize the policy
