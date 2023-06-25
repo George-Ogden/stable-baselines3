@@ -38,9 +38,9 @@ def value_to_support(values: th.Tensor, support: th.Tensor) -> th.Tensor:
     assert values.ndim == 1, "values must be 1 dimensional"
     assert support.size(-2) == values.size(-1), "support and values must match"
     values = values.view(-1, 1)
-    upper_bounds = th.clamp(th.searchsorted(support, values, side='left'), 1, support.size(-1) - 1)
+    upper_bounds = th.clamp(th.searchsorted(support.contiguous(), values, side='left'), 1, support.size(-1) - 1)
     lower_bounds = upper_bounds - 1
-    additional_indices = th.arange(support.size(0), dtype=th.int32)
+    additional_indices = th.arange(support.size(0), dtype=th.int32, device=support.device)
     lower_bounds = th.stack((additional_indices, lower_bounds.squeeze(dim=-1)), dim=-1)
     upper_bounds = th.stack((additional_indices, upper_bounds.squeeze(dim=-1)), dim=-1)
     values = values.squeeze(dim=-1)
